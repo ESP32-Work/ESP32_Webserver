@@ -3,8 +3,6 @@
 
 const char* ssid = "ESP32";
 const char* password = "";
-// const char* ssid = "Nayatel_2.4G";
-// const char* password = "Ismail@123";
 
 IPAddress local_ip(192,168,0,10);
 IPAddress gateway(192,168,0,1);

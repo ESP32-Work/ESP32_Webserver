@@ -1,12 +1,12 @@
 #include <ESP_Mail_Client.h>
 #include <WiFi.h>
 
-const char* ssid = "Nayatel_2.4G";
-const char* password = "Ismail@123";
+const char* ssid = "";
+const char* password = "";
 
-#define emailReciever "0ali.ahmed123@gmail.com"
-#define emailPassword "mnzg lemb lopl gacv"
-#define emailAccount "ibrahimmansur4@gmail.com"
+#define emailReciever ""
+#define emailPassword ""
+#define emailAccount ""
 #define emailServer "smtp.gmail.com"
 #define emailServerPort 465
 
