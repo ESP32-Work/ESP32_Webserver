@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>My First Web Page</title>
+</head>
+<body>
+
+    <?php
+
+    $servername = "";
+    $dbname = "";
+    $username = "";
+    $password = "";
+
+    //create connection
+    $conn = new mysqli($servername, $username, $password, $dbname);
+    if($conn->connect_error){
+        die("Connection failed: " . $conn->connect_error);
+    }
+
+    $sql = "SELECT id, SensorData, LocationData, value1, value2, value3, reading_time FROM ESPData ORDER BY id DESC";
+
+    echo '<table cellspacing="5" cellpadding="5">
+          <tr>
+            <td>ID</td>
+            <td>SensorData</td>
+            <td>LocationData</td>
+            <td>value1</td>
+            <td>value2</td>
+            <td>value3</td>
+            <td>reading_time</td>
+          </tr> ';
+          
+    if($result = $conn->query($sql)){
+        while($row = $result->fetch_assoc()) {
+            $row_id = $row["id"];
+            $row_sensorData = $row["SensorData"];
+            $row_locationData = $row["LocationData"];
+            $row_value1 = $row["value1"];
+            $row_value2 = $row["value2"];
+            $row_value3 = $row["value3"];
+            $row_readingTime = $row["reading_time"];
+            
+            echo '<tr>';
+            echo '<td>' . $row_id . '</td>';
+            echo '<td>' . $row_sensorData . '</td>';
+            echo '<td>' . $row_locationData . '</td>';
+            echo '<td>' . $row_value1 . '</td>';
+            echo '<td>' . $row_value2 . '</td>';
+            echo '<td>' . $row_value3 . '</td>';
+            echo '<td>' . $row_readingTime . '</td>';
+            echo '</tr>';
+        }
+        $result->free();
+    } 
+    $conn->close();
+    ?>
+    </table>
+</body>
+</html>
