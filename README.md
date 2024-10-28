@@ -9,6 +9,8 @@
     - [ESP32\_DataBase\_System](#esp32_database_system)
     - [ESP32\_WebServer](#esp32_webserver)
     - [Webcam\_Streaming\_on\_ESP32](#webcam_streaming_on_esp32)
+    - [WifiConnector\_esp32](#wificonnector_esp32)
+    - [WifiManager\_ESP32](#wifimanager_esp32)
   - [Features](#features)
   - [Hardware Requirements](#hardware-requirements)
   - [Software Requirements](#software-requirements)
@@ -63,11 +65,19 @@ This project demonstrates the creation of a sophisticated web server using an ES
 ### Webcam_Streaming_on_ESP32
 This project involves streaming webcam data using an ESP32.
 
+### WifiConnector_esp32
+This project demonstrates connecting to Wi-Fi networks using an ESP32, including handling multiple Wi-Fi modes and providing a web interface for configuration.
+
+### WifiManager_ESP32
+This project uses the WiFiManager library to manage Wi-Fi connections on an ESP32 device, automatically connecting to saved networks or starting an access point if the connection fails.
+
 ## Features
 - **Email_SMTP_ESP32**: Send emails using SMTP.
 - **ESP32_DataBase_System**: Store and retrieve data using a database system.
 - **ESP32_WebServer**: Serve multiple interactive web pages with animations, authentication, and real-time updates.
 - **Webcam_Streaming_on_ESP32**: Stream webcam data over the network.
+- **WifiConnector_esp32**: Connect to Wi-Fi networks and manage connections via a web interface.
+- **WifiManager_ESP32**: Automatically manage Wi-Fi connections using the WiFiManager library.
 
 ## Hardware Requirements
 - ESP32 microcontroller board
@@ -78,4 +88,3 @@ This project involves streaming webcam data using an ESP32.
 - Arduino IDE or PlatformIO
 - ESP32 board support package
 - Required libraries (specific to each project)
-
