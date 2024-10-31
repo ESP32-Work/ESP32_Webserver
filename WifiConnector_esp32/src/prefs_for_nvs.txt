@@ -529,7 +529,7 @@ void handleWiFiConnect(AsyncWebServerRequest *request) {
   }
 }
 
-
+void attemptWiFiConnections();
 
 void handleWiFiEvent(WiFiEvent_t event)
 {
@@ -547,6 +547,9 @@ void handleWiFiEvent(WiFiEvent_t event)
     Serial.println("Disconnected from WiFi access point");
     Serial.println("Trying to Reconnect");
     WiFi.begin();
+    break;
+  case ARDUINO_EVENT_WIFI_SCAN_DONE:
+    Serial.println("Scan completed");
     break;
   }
 }
@@ -637,7 +640,7 @@ void setup() {
   xTaskCreate(
     performWiFiScan,    // Function that should be called
     "WiFi Scanner",     // Name of the task
-    10000,              // Stack size (bytes)
+    4096,              // Stack size (bytes)
     NULL,               // Parameter to pass
     1,                  // Task priority
     NULL                // Task handle
