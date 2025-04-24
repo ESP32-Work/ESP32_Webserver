@@ -1,0 +1,682 @@
+#include <WiFi.h>
+#include <AsyncTCP.h>
+#include <ESPAsyncWebServer.h>
+#include <Preferences.h>
+
+Preferences prefs;
+
+// Network credentials
+const char *ssid_AP = "ESP32-AP";
+const char *password_AP = "123456789";
+
+// Create an Async Web Server object on port 80
+AsyncWebServer server(80);
+
+// Variables to store scan results
+String scanResults = "";
+bool scanComplete = false;
+
+// HTML for the home page
+const char* home_html = R"rawliteral(
+<!DOCTYPE HTML>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESP32 Home</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f8f9fa;
+        }
+        .container {
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+            text-align: center;
+        }
+        h1 {
+            color: #007bff;
+            font-size: 24px;
+            margin-bottom: 20px;
+        }
+        .btn {
+            display: inline-block;
+            background-color: #007bff;
+            color: white;
+            padding: 12px 24px;
+            text-decoration: none;
+            border-radius: 4px;
+            margin: 10px;
+            transition: background-color 0.3s;
+        }
+        .btn:hover {
+            background-color: #0056b3;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>ESP32 Device Manager</h1>
+        <p>Welcome to your ESP32 device management interface.</p>
+        <a href="/wifi_config" class="btn">Wi-Fi Configuration</a>
+    </div>
+</body>
+</html>)rawliteral";
+
+// HTML for the WiFi configuration page
+const char* wifi_config_html = R"rawliteral(
+<!DOCTYPE HTML>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ESP32 Wi-Fi Configuration</title>
+    <style>
+        :root {
+            --primary-color: #007bff;
+            --secondary-color: #6c757d;
+            --success-color: #28a745;
+            --danger-color: #dc3545;
+            --light-color: #f8f9fa;
+            --dark-color: #343a40;
+        }
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: var(--dark-color);
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: var(--light-color);
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .back-btn {
+            text-decoration: none;
+            color: var(--primary-color);
+            display: flex;
+            align-items: center;
+        }
+        .back-btn:hover {
+            text-decoration: underline;
+        }
+        h1 {
+            color: var(--primary-color);
+            font-size: 24px;
+            margin: 0;
+        }
+        #app {
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+        }
+        #networks {
+            max-height: 300px;
+            overflow-y: auto;
+            margin-bottom: 20px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .network-list {
+            list-style-type: none;
+            padding: 0;
+            margin: 0;
+        }
+        .network-item {
+            display: flex;
+            align-items: center;
+            padding: 10px;
+            border-bottom: 1px solid #eee;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        .network-item:last-child {
+            border-bottom: none;
+        }
+        .network-item:hover {
+            background-color: #f0f0f0;
+        }
+        .network-item.selected {
+            background-color: #e6f2ff;
+        }
+        .network-icon {
+            font-size: 20px;
+            margin-right: 10px;
+        }
+        .network-details {
+            flex-grow: 1;
+        }
+        .network-ssid {
+            font-weight: bold;
+        }
+        .network-strength {
+            font-size: 12px;
+            color: var(--secondary-color);
+        }
+        input, button {
+            width: 100%;
+            padding: 10px;
+            margin: 10px 0;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+        }
+        button {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            cursor: pointer;
+            transition: background-color 0.3s;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        button:disabled {
+            background-color: var(--secondary-color);
+            cursor: not-allowed;
+        }
+        #status {
+            margin-top: 20px;
+            padding: 10px;
+            border-radius: 4px;
+            text-align: center;
+            font-size: 14px;
+        }
+        .status-message {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            display: none;
+        }
+        .status-success {
+            background-color: var(--success-color);
+            color: white;
+        }
+        .status-error {
+            background-color: var(--danger-color);
+            color: white;
+        }
+        .status-info {
+            background-color: var(--primary-color);
+            color: white;
+        }
+        .connection-info {
+            margin: 10px 0;
+            padding: 10px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+            border: 1px solid #dee2e6;
+        }
+        .connection-info span {
+            font-weight: bold;
+            color: #007bff;
+        }
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(0, 0, 0, 0.3);
+            border-radius: 50%;
+            border-top-color: var(--primary-color);
+            animation: spin 1s ease-in-out infinite;
+            margin-right: 10px;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div class="header">
+            <a href="/" class="back-btn">← Back to Home</a>
+            <h1>Wi-Fi Configuration</h1>
+        </div>
+        <div class="connection-info">
+            <div>Status: <span id="connectionStatus">Checking...</span></div>
+            <div>Connected to: <span id="connectedSSID">Checking...</span></div>
+            <div>IP Address: <span id="connectedIP">Checking...</span></div>
+        </div>
+        <button id="scanBtn" onclick="scanNetworks()">Scan for Networks</button>
+        <div id="networks">
+            <ul class="network-list" id="networkList"></ul>
+        </div>
+        <form id="connect-form">
+            <input type="text" id="ssid" name="ssid" placeholder="SSID" required>
+            <input type="password" id="password" name="password" placeholder="Password" required>
+            <button type="submit">Connect</button>
+        </form>
+        <div id="status" class="status-message"></div>
+    </div>
+
+    <script>
+        let selectedNetwork = '';
+        let connectionCheckInterval = null;
+
+        function showStatus(message, type) {
+            const statusDiv = document.getElementById('status');
+            statusDiv.textContent = message;
+            statusDiv.className = 'status-message';
+            statusDiv.classList.add(`status-${type}`);
+            statusDiv.style.display = 'block';
+            
+            setTimeout(() => {
+                statusDiv.style.display = 'none';
+            }, 5000);
+        }
+
+        function updateConnectionStatus() {
+            fetch('/getConnectionStatus')
+                .then(response => response.json())
+                .then(data => {
+                    console.log('Connection status:', data);
+                    
+                    const statusElement = document.getElementById('connectionStatus');
+                    const ssidElement = document.getElementById('connectedSSID');
+                    const ipElement = document.getElementById('connectedIP');
+                    
+                    if (data.connected) {
+                        statusElement.textContent = 'Connected';
+                        ssidElement.textContent = data.ssid || 'Unknown';
+                        ipElement.textContent = data.ip || 'Unavailable';
+                    } else {
+                        statusElement.textContent = 'Disconnected';
+                        ssidElement.textContent = 'Not connected';
+                        ipElement.textContent = 'Not available';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error fetching connection status:', error);
+                    showStatus('Error checking connection status', 'error');
+                });
+        }
+
+        function connectToWiFi(formData) {
+            showStatus('Connecting...', 'info');
+            
+            fetch('/connect', {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.text())
+            .then(data => {
+                showStatus(data, 'info');
+                
+                if (connectionCheckInterval) {
+                    clearInterval(connectionCheckInterval);
+                }
+                connectionCheckInterval = setInterval(() => {
+                    updateConnectionStatus();
+                    fetch('/getConnectionStatus')
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.connected) {
+                                clearInterval(connectionCheckInterval);
+                                connectionCheckInterval = null;
+                                showStatus('Successfully connected!', 'success');
+                            }
+                        });
+                }, 2000);
+                
+                setTimeout(() => {
+                    if (connectionCheckInterval) {
+                        clearInterval(connectionCheckInterval);
+                        connectionCheckInterval = null;
+                        showStatus('Connection timeout - please try again', 'error');
+                    }
+                }, 30000);
+            })
+            .catch(error => {
+                showStatus('Connection failed', 'error');
+            });
+        }
+
+        document.getElementById('connect-form').onsubmit = function(e) {
+            e.preventDefault();
+            connectToWiFi(new FormData(this));
+        };
+
+
+        function scanNetworks() {
+            const networkList = document.getElementById('networkList');
+            const scanBtn = document.getElementById('scanBtn');
+            
+            networkList.innerHTML = '<li class="network-item"><div class="loading"></div> Scanning...</li>';
+            scanBtn.disabled = true;
+            
+            function checkScanStatus() {
+                fetch('/scanNetworks')
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.status === "scanning") {
+                            setTimeout(checkScanStatus, 1000);
+                        } else {
+                            displayNetworks(data);
+                            scanBtn.disabled = false;
+                        }
+                    })
+                    .catch(error => {
+                        networkList.innerHTML = '<li class="network-item">Error scanning networks: ' + error + '</li>';
+                        scanBtn.disabled = false;
+                    });
+            }
+
+            checkScanStatus();
+        }
+
+        function displayNetworks(networks) {
+            const networkList = document.getElementById('networkList');
+            networkList.innerHTML = '';
+            
+            if (networks.length === 0) {
+                networkList.innerHTML = '<li class="network-item">No networks found.</li>';
+                return;
+            }
+            
+            networks.forEach(network => {
+                const li = document.createElement('li');
+                li.className = 'network-item';
+                li.onclick = () => selectNetwork(network.ssid);
+                
+                const icon = document.createElement('span');
+                icon.className = 'network-icon';
+                icon.textContent = network.encrypted ? '🔒' : '📶';
+                
+                const details = document.createElement('div');
+                details.className = 'network-details';
+                
+                const ssid = document.createElement('div');
+                ssid.className = 'network-ssid';
+                ssid.textContent = network.ssid;
+                
+                const strength = document.createElement('div');
+                strength.className = 'network-strength';
+                strength.textContent = `Signal Strength: ${network.rssi} dBm`;
+                
+                details.appendChild(ssid);
+                details.appendChild(strength);
+                
+                li.appendChild(icon);
+                li.appendChild(details);
+                networkList.appendChild(li);
+            });
+        }
+
+        function selectNetwork(ssid) {
+            selectedNetwork = ssid;
+            document.getElementById('ssid').value = ssid;
+            document.querySelectorAll('.network-item').forEach(el => {
+                if (el.querySelector('.network-ssid').textContent === ssid) {
+                    el.classList.add('selected');
+                } else {
+                    el.classList.remove('selected');
+                }
+            });
+        }
+
+        window.onload = function() {
+            scanNetworks();
+            updateConnectionStatus();
+            setInterval(updateConnectionStatus, 5000);
+        };
+    </script>
+</body>
+</html>)rawliteral";
+
+// Handle not found pages
+void notFound(AsyncWebServerRequest *request) {
+  request->send(404, "text/plain", "Not Found");
+}
+
+void performWiFiScan(void * parameter) {
+  for(;;) {
+    if (scanComplete) {
+      vTaskDelay(1000 / portTICK_PERIOD_MS);
+      continue;
+    }
+    
+    Serial.println("Starting WiFi scan...");
+    int n = WiFi.scanNetworks();
+    
+    while (n == WIFI_SCAN_RUNNING) {
+      Serial.println("Scanning...");
+      vTaskDelay(100 / portTICK_PERIOD_MS); // Wait for 100ms
+      n = WiFi.scanComplete();
+    }
+    
+    if (n == WIFI_SCAN_FAILED) {
+      Serial.println("WiFi scan failed");
+      scanResults = "[]";
+    } else {
+      Serial.printf("Scan completed. Found %d networks.\n", n);
+      scanResults = "[";
+      for (int i = 0; i < n; ++i) {
+        if (i) scanResults += ",";
+        scanResults += "{";
+        scanResults += "\"ssid\":\"" + WiFi.SSID(i) + "\",";
+        scanResults += "\"rssi\":" + String(WiFi.RSSI(i)) + ",";
+        scanResults += "\"encrypted\":" + String(WiFi.encryptionType(i) != WIFI_AUTH_OPEN);
+        scanResults += "}";
+      }
+      scanResults += "]";
+    }
+    
+    scanComplete = true;
+    WiFi.scanDelete();
+  }
+}
+
+void handleScanNetworks(AsyncWebServerRequest *request) {
+  if (scanComplete) {
+    request->send(200, "application/json", scanResults);
+    scanComplete = false; // Reset for next scan
+  } else {
+    request->send(202, "application/json", "{\"status\":\"scanning\"}");
+  }
+}
+
+void handleGetCurrentSSID(AsyncWebServerRequest *request) {
+  if (WiFi.status() == WL_CONNECTED) {
+    String ssid = WiFi.SSID();
+    String jsonResponse = "{\"ssid\":\"" + ssid + "\"}";
+    request->send(200, "application/json", jsonResponse);
+  } else {
+    request->send(200, "application/json", "{\"ssid\":null}");
+  }
+}
+
+
+// Handle connection status checks
+void handleGetConnectionStatus(AsyncWebServerRequest *request) {
+    String response;
+    if (WiFi.status() == WL_CONNECTED) {
+        response = "{\"connected\":true,\"ssid\":\"" + WiFi.SSID() + "\",\"ip\":\"" + WiFi.localIP().toString() + "\"}";
+    } else {
+        response = "{\"connected\":false,\"ssid\":null,\"ip\":null}";
+    }
+    request->send(200, "application/json", response);
+}
+
+// Handle WiFi connection
+void handleWiFiConnect(AsyncWebServerRequest *request) {
+  String ssid = request->arg("ssid");
+  String pass = request->arg("password");
+  
+  if (ssid != "" && pass != "") {
+    // Save the SSID and password to NVS
+    
+    prefs.putString("ssid", ssid);
+    prefs.putString("password", pass);
+    
+    WiFi.disconnect();
+    delay(1000);
+    WiFi.begin(ssid.c_str(), pass.c_str());
+    request->send(200, "text/plain", "Attempting to connect to " + ssid);
+  } else {
+    request->send(400, "text/plain", "Invalid SSID or Password!");
+  }
+}
+
+void attemptWiFiConnections();
+
+void handleWiFiEvent(WiFiEvent_t event)
+{
+  switch (event)
+  {
+  case ARDUINO_EVENT_WIFI_STA_CONNECTED:
+    Serial.println("Connected to AP successfully!");
+    break;
+  case ARDUINO_EVENT_WIFI_STA_GOT_IP:
+    Serial.println("WiFi connected");
+    Serial.print("IP address: ");
+    Serial.println(WiFi.localIP());
+    break;
+  case ARDUINO_EVENT_WIFI_STA_DISCONNECTED:
+    Serial.println("Disconnected from WiFi access point");
+    Serial.println("Trying to Reconnect");
+    WiFi.begin();
+    WiFi.disconnect(false);
+    break;
+  case ARDUINO_EVENT_WIFI_SCAN_DONE:
+    Serial.println("Scan completed");
+    attemptWiFiConnections();
+    break;
+  case ARDUINO_EVENT_WIFI_AP_STOP:
+    Serial.println("WiFi access point stopped");
+    // Stop the AP
+    WiFi.softAPdisconnect(true);
+    // Restart the AP
+    WiFi.softAP(ssid_AP, password_AP);
+    Serial.println("WiFi access point restarted");
+    break;
+  }
+}
+
+bool connectToWiFi(const String& ssid, const String& password)
+{
+  if (ssid.length() == 0 || password.length() == 0) {
+    Serial.println("SSID or password is empty.");
+    return false;
+  }
+
+  WiFi.disconnect(true);
+  delay(1000); // Wait for WiFi disconnect
+  Serial.println("Attempting to connect to WiFi network: " + ssid);
+
+  WiFi.begin(ssid.c_str(), password.c_str());
+  for (int attempts = 0; attempts < 20; attempts++)
+  {
+    if (WiFi.status() == WL_CONNECTED)
+    {
+      Serial.println("Connected to WiFi!");
+      Serial.print("IP Address: ");
+      Serial.println(WiFi.localIP());
+      return true;
+    }
+    delay(500);
+  }
+  Serial.println("Failed to connect!");
+  return false;
+}
+
+void attemptWiFiConnections()
+{
+    // Attempt to reconnect using the saved credentials
+    String savedSsid = prefs.getString("ssid", "");
+    String savedPassword = prefs.getString("password", "");
+
+    if (!connectToWiFi(savedSsid, savedPassword))
+    {
+    Serial.println("Stored credentials failed.");
+    }
+}
+
+
+
+void setup() {
+  // Start Serial Monitor
+  Serial.begin(115200);
+
+  // Set up Wi-Fi in both AP and STA modes
+  WiFi.mode(WIFI_AP_STA);
+  
+  // Start Access Point
+  WiFi.softAP(ssid_AP, password_AP);
+  Serial.println("Access Point Started!");
+  Serial.print("AP IP Address: ");
+  Serial.println(WiFi.softAPIP());
+
+  // Serve the home page with redirect
+    server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
+        request->send(200, "text/html", home_html);
+    });
+
+    // Serve the WiFi configuration page
+    server.on("/wifi_config", HTTP_GET, [](AsyncWebServerRequest *request) {
+        request->send(200, "text/html", wifi_config_html);
+    });
+
+  // Add new endpoint for connection status
+    server.on("/getConnectionStatus", HTTP_GET, handleGetConnectionStatus);
+
+  // Handle Wi-Fi connection
+    server.on("/connect", HTTP_POST, handleWiFiConnect);
+
+    // Scan and display Wi-Fi networks
+    server.on("/scanNetworks", HTTP_GET, handleScanNetworks);
+
+    // Handle not found
+    server.onNotFound(notFound);
+
+    // Start server
+    server.begin();
+
+    WiFi.onEvent(handleWiFiEvent);
+    prefs.begin("wifi_creds", false);
+    attemptWiFiConnections();
+  // Create a task for WiFi scanning
+  xTaskCreate(
+    performWiFiScan,    // Function that should be called
+    "WiFi Scanner",     // Name of the task
+    4096,              // Stack size (bytes)
+    NULL,               // Parameter to pass
+    1,                  // Task priority
+    NULL                // Task handle
+  );
+
+  Serial.println("HTTP server started");
+}
+
+unsigned long previousMillis = 0;
+
+void loop() {
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.print("Connected to Wi-Fi network: ");
+    Serial.println(WiFi.SSID());
+    Serial.print("IP Address: ");
+    Serial.println(WiFi.localIP());
+  } else {
+    Serial.println("Not connected to any Wi-Fi network.");
+    unsigned long currentMillis = millis();
+    if (currentMillis - previousMillis >= 15000) {
+      Serial.println("Attempting to reconnect to WiFi...");
+      previousMillis = currentMillis;
+      attemptWiFiConnections();
+    }
+  }
+
+  delay(10000); // Wait for 10 seconds before the next check
+}
+

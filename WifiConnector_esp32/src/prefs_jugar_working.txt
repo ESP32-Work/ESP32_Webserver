@@ -553,6 +553,12 @@ void handleWiFiEvent(WiFiEvent_t event)
     Serial.println("Scan completed");
     attemptWiFiConnections();
     break;
+  case ARDUINO_EVENT_WIFI_AP_STOP:
+    Serial.println("WiFi access point stopped");
+    // Restart the AP
+    WiFi.softAP(ssid_AP, password_AP);
+    Serial.println("WiFi access point restarted");
+    break;
   }
 }
 
